@@ -1,25 +1,99 @@
-import pandas as pd
+import pandas
+from dash import Dash, html, dcc, Input, Output
 
-# Read the CSV files
-data_files = ['daily_sales_data_0.csv', 'daily_sales_data_1.csv', 'daily_sales_data_2.csv']
-dfs = [pd.read_csv(file) for file in data_files]
+from plotly.express import line
 
-# Combine the DataFrames
-combined_df = pd.concat(dfs, ignore_index=True)
+# the path to the formatted data file
+DATA_PATH = "./formatted_data.csv"
+COLORS = {
+    "primary": "#FEDBFF",
+    "secondary": "#D598EB",
+    "font": "#522A61"
+}
 
-# Filter rows with 'product' equal to 'pink morsel'
-pink_morsel_df = combined_df[combined_df['product'] == 'pink morsel']
+# load in data
+data = pandas.read_csv(DATA_PATH)
+data = data.sort_values(by="date")
 
-# Convert 'price' to a numeric value without the dollar sign
-pink_morsel_df['price'] = pink_morsel_df['price'].str.replace('$', '').astype(float)
+# initialize dash
+dash_app = Dash(__name__)
 
-# Calculate 'sales' by multiplying 'quantity' and 'price'
-pink_morsel_df['sales'] = pink_morsel_df['quantity'] * pink_morsel_df['price']
 
-# Select and reorder columns
-final_df = pink_morsel_df[['sales', 'date', 'region']]
+# create the visualization
+def generate_figure(chart_data):
+    line_chart = line(chart_data, x="date", y="sales", title="Pink Morsel Sales")
+    line_chart.update_layout(
+        plot_bgcolor=COLORS["secondary"],
+        paper_bgcolor=COLORS["primary"],
+        font_color=COLORS["font"]
+    )
+    return line_chart
 
-# Save the final DataFrame to a new CSV file
-final_df.to_csv('formatted_output.csv', index=False)
 
-print("Formatted output saved to 'formatted_output.csv'")
+visualization = dcc.Graph(
+    id="visualization",
+    figure=generate_figure(data)
+)
+
+# create the header
+header = html.H1(
+    "Pink Morsel Visualizer",
+    id="header",
+    style={
+        "background-color": COLORS["secondary"],
+        "color": COLORS["font"],
+        "border-radius": "20px"
+    }
+)
+
+# region picker
+region_picker = dcc.RadioItems(
+    ["north", "east", "south", "west", "all"],
+    "north",
+    id="region_picker",
+    inline=True
+)
+region_picker_wrapper = html.Div(
+    [
+        region_picker
+    ],
+    style={
+        "font-size": "150%"
+    }
+)
+
+
+# define the region picker callback
+@dash_app.callback(
+    Output(visualization, "figure"),
+    Input(region_picker, "value")
+)
+def update_graph(region):
+    # filter the dataset
+    if region == "all":
+        trimmed_data = data
+    else:
+        trimmed_data = data[data["region"] == region]
+
+    # generate a new line chart with the filtered data
+    figure = generate_figure(trimmed_data)
+    return figure
+
+
+# define the app layout
+dash_app.layout = html.Div(
+    [
+        header,
+        visualization,
+        region_picker_wrapper
+    ],
+    style={
+        "textAlign": "center",
+        "background-color": COLORS["primary"],
+        "border-radius": "20px"
+    }
+)
+
+# this is only true if the module is executed as the program entrypoint
+if __name__ == '__main__':
+    dash_app.run_server()
